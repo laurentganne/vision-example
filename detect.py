@@ -8,15 +8,96 @@ import json
 import time
 
 from google.cloud import pubsub_v1
+from google.cloud import storage
 from google.cloud import vision
 from google.cloud.vision import types
+from enum import Enum
+from io import BytesIO
+from PIL import Image, ImageDraw
 
-visionClient = vision.ImageAnnotatorClient()
 
-def annotate(bucket, image):
-    print('Annotating gs://{}/{}'.format(bucket, image))
-    response = visionClient.annotate_image({
-        'image': {'source': {'image_uri': 'gs://{}/{}'.format(bucket, image)}},
+vision_client = vision.ImageAnnotatorClient()
+storage_client = storage.Client()
+
+
+class FeatureType(Enum):
+    PAGE = 1
+    BLOCK = 2
+    PARA = 3
+    WORD = 4
+    SYMBOL = 5
+
+
+def draw_boxes(image, bounds, color):
+    """Draw a border around the image using the hints in the vector list."""
+    # [START draw_blocks]
+    draw = ImageDraw.Draw(image)
+
+    for bound in bounds:
+        draw.polygon([
+            bound.vertices[0].x, bound.vertices[0].y,
+            bound.vertices[1].x, bound.vertices[1].y,
+            bound.vertices[2].x, bound.vertices[2].y,
+            bound.vertices[3].x, bound.vertices[3].y], None, color)
+    return image
+    # [END draw_blocks]
+
+def get_text_annotations_bounds(annotations, feature):
+    # [START detect_bounds]
+    """Returns document bounds given an image."""
+
+    bounds = []
+
+    # Collect specified feature bounds by enumerating all document features
+    for page in annotations.pages:
+        for block in page.blocks:
+            for paragraph in block.paragraphs:
+                for word in paragraph.words:
+                    for symbol in word.symbols:
+                        if (feature == FeatureType.SYMBOL):
+                            bounds.append(symbol.bounding_box)
+
+                    if (feature == FeatureType.WORD):
+                        bounds.append(word.bounding_box)
+
+                if (feature == FeatureType.PARA):
+                    bounds.append(paragraph.bounding_box)
+
+            if (feature == FeatureType.BLOCK):
+                bounds.append(block.bounding_box)
+
+        if (feature == FeatureType.PAGE):
+            bounds.append(block.bounding_box)
+
+    # The list `bounds` contains the coordinates of the bounding boxes.
+    # [END detect_bounds]
+    return bounds
+
+def render_full_text_annotation(bucket_name, blob_name, annotations):
+    # [START render_doc_text]
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    byte_stream = BytesIO()
+    blob.download_to_file(byte_stream)
+    byte_stream.seek(0)
+    image = Image.open(byte_stream)
+
+    bounds = get_text_annotations_bounds(annotations, FeatureType.PAGE)
+    draw_boxes(image, bounds, 'blue')
+    bounds = get_text_annotations_bounds(annotations, FeatureType.PARA)
+    draw_boxes(image, bounds, 'red')
+    bounds = get_text_annotations_bounds(annotations, FeatureType.WORD)
+    draw_boxes(image, bounds, 'yellow')
+
+    image.save("tmp.jpg")
+    # [END render_doc_text]
+
+
+def annotate(bucket_name, blob_name):
+    imageURI = 'gs://{}/{}'.format(bucket_name, blob_name)
+    print('Annotating {}'.format(imageURI))
+    response = vision_client.annotate_image({
+        'image': {'source': {'image_uri': imageURI}},
         'features': [
             {'type': vision.enums.Feature.Type.FACE_DETECTION},
             {'type': vision.enums.Feature.Type.LABEL_DETECTION},
@@ -28,8 +109,9 @@ def annotate(bucket, image):
     #print('Created file {}.json'.format(image))
     # Manage response.web_detection as well as
     # full_text_annotation label_annotations logo_annotations
-    # ansface_annotations
-    print('Response annotations:\n{}'.format(response.face_annotations))
+    # and face_annotations
+    # print('Response annotations:\n{}'.format(response.face_annotations))
+    render_full_text_annotation(bucket_name, blob_name, response.full_text_annotation)
 
 def summarize(message):
     # [START parse_message]
