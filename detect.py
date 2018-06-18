@@ -14,15 +14,13 @@ from google.cloud import vision
 from google.cloud.vision import types
 from enum import Enum
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 
 vision_client = vision.ImageAnnotatorClient()
 storage_client = storage.Client()
 
-# font = ImageFont.truetype('arial.ttf', 16)
-font = ImageFont.truetype('/Library/Fonts/Arial.ttf', 16)
-
+# Document text detection types
 class FeatureType(Enum):
     PAGE = 1
     BLOCK = 2
@@ -45,14 +43,13 @@ def draw_boxes(image, bounds, color):
             bound.vertices[1].x, bound.vertices[1].y,
             bound.vertices[2].x, bound.vertices[2].y,
             bound.vertices[3].x, bound.vertices[3].y], None, color)
-        draw.text((bound.vertices[0].x, bound.vertices[0].y - 16),'{}'.format(i),(0,0,0),font)
+        draw.text((bound.vertices[0].x, bound.vertices[0].y - 16),'{}'.format(i),(0,0,0))
         i += 1
     return image
 
 def get_text_annotations_bounds(annotations, feature):
 
     bounds = []
-
     # Collect specified feature bounds by enumerating all document features
     for page in annotations.pages:
         for block in page.blocks:
@@ -76,40 +73,45 @@ def get_text_annotations_bounds(annotations, feature):
 
     return bounds
 
-def add_likelihood(likelihood, expected, value, result) {
+def add_likelihood(likelihood, expected, value, result):
     if likelihood_name[likelihood] == expected:
-        result.append('{}, '.format(value)
-}
-def get_likelihoods(face) {
-    very_likely = ""
-    likely = ""
-    add_likelihood(face.joy_likelihood, "VERY_LIKELY", "joy", very_likely)
-    add_likelihood(face.joy_likelihood, "LIKELY", "joy", likely)
-    add_likelihood(face.sorrow_likelihood, "VERY_LIKELY", "sorrow", very_likely)
-    add_likelihood(face.sorrow_likelihood, "LIKELY", "sorrow", likely)
-    add_likelihood(face.anger_likelihood, "VERY_LIKELY", "anger", very_likely)
-    add_likelihood(face.anger_likelihood, "LIKELY", "anger", likely)
-    add_likelihood(face.surprise_likelihood, "VERY_LIKELY", "surprise", very_likely)
-    add_likelihood(face.surprise_likelihood, "LIKELY", "surprise", likely)
-    add_likelihood(face.under_exposed_likelihood, "VERY_LIKELY", "underexposed", very_likely)
-    add_likelihood(face.under_exposed_likelihood, "LIKELY", "underexposed", likely)
-    add_likelihood(face.blurred_likelihood, "VERY_LIKELY", "blurred", very_likely)
-    add_likelihood(face.blurred_likelihood, "LIKELY", "blurred", likely)
-    add_likelihood(face.headwear_likelihood, "VERY_LIKELY", "head wear", very_likely)
-    add_likelihood(face.headwear_likelihood, "LIKELY", "head wear", likely)
+        result.append(value)
 
-    result = "-"
-    if len(very_likely) > 0:
-        result = 'Very likely: {}'.format(very_likely[0:(len(very_likely) - 2)])
-        if len(likely) > 0:
-            result += '. Likely: {}'.format(likely[0:(len(likely) - 2)])
-    elif len(likely) > 0:
-        result = 'Likely: {}'.format(likely[0:(len(likely) - 2)])
+def get_likelihoods(face, likelihood):
+    resultList = []
+    add_likelihood(face.joy_likelihood, likelihood, "Joy", resultList)
+    add_likelihood(face.sorrow_likelihood, likelihood, "Sorrow", resultList)
+    add_likelihood(face.anger_likelihood, likelihood, "Anger", resultList)
+    add_likelihood(face.surprise_likelihood, likelihood, "Surprise", resultList)
+    add_likelihood(face.under_exposed_likelihood, likelihood, "Underexposed", resultList)
+    add_likelihood(face.blurred_likelihood, likelihood, "Blurred", resultList)
+    add_likelihood(face.headwear_likelihood, likelihood, "Head wear", resultList)
+
+    result = ""
+    if len(resultList) > 0:
+        result = ', '.join(resultList)
     
     return result
-}
+    
 
-def render_face_annotations(bucket_name, blob_name, faces, html_result):
+def get_faces_likelihoods(faces):
+    html_result = ""
+    i = 1
+    if len(faces) > 0:
+        html_result = """
+        <div style="float:right">
+        <table style="float:top;">
+        <tr><th>Face ID</th><th>Very likely</th><th>Likely</th></tr>
+        """
+        for face in faces:
+            html_result += '<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                i, get_likelihoods(face, "VERY_LIKELY"), get_likelihoods(face, "LIKELY"))
+            i += 1
+
+        html_result += '</table></div><div style="clear:both"/>\n'
+    return html_result
+
+def render_face_annotations(bucket_name, blob_name, faces):
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     byte_stream = BytesIO()
@@ -119,45 +121,71 @@ def render_face_annotations(bucket_name, blob_name, faces, html_result):
     draw = ImageDraw.Draw(image)
     
     i = 1
-    if len(faces) > 0:
-        html_result += """
-        <h1>Faces detection</h1>
-        <table border="1">
-        <tr><th>Face ID</th><th>Likelihood</th></tr>
-        """
-
     for face in faces:
         box = [(vertex.x, vertex.y)
                for vertex in face.bounding_poly.vertices]
         draw.line(box + [box[0]], width=5, fill='#00ff00')
-        draw.text((box[0][0], box[0][1] - 16),'{}'.format(i),(0,0,0),font)
-        html_result += '<tr><td>{}</td><td>{}</td></tr>'.format(i, get_likelihoods(face))
+        draw.text((box[0][0], box[0][1] - 16),'{}'.format(i),(0,0,0))
         i += 1
 
-    if len(faces) > 0:
-        html_result += "</table>"
-
-    prefix = os.path.splitext(blob_name)[0]
-    image.save('{}_faces.jpg'.format(prefix))
-    with open('{}_faces.txt'.format(prefix), 'w') as text_file:
-        text_file.write("{}".format(faces))
-        
+    html_result = "\n<p>No face detected.</p>\n"
+    if i > 1:
+        prefix = os.path.splitext(blob_name)[0]
+        image_file_name = '{}_faces.jpg'.format(prefix)
+        image.save(image_file_name)
+        html_result = '<div style="float:left; width: 60%"><img src={} alt="Faces"></div>'.format(image_file_name)
+            
+    return html_result
 
 def render_web_annotations(bucket_name, blob_name, annotations):
 
-    prefix = os.path.splitext(blob_name)[0]
-    with open('{}_web.txt'.format(prefix), 'w') as text_file:
-        if annotations.pages_with_matching_images:
+    html_result = '\n<p>No web page matching found.</p>\n'
+
+    if annotations.pages_with_matching_images:
+        if len(annotations.pages_with_matching_images) > 0:
+            html_result = """
+            <table>
+            <tr><th style="text-align: left;">URLs found</th></tr>
+            """                
+            
             for page in annotations.pages_with_matching_images:
-                text_file.write('{}\n'.format(page.url))
+                html_result += '<tr><td style="text-align: left;"><a href="{}">{}</a></td></tr>\n'.format(page.url, page.url)
+
+            html_result += '</table>\n'
+    
+    return html_result
 
 def render_label_annotations(bucket_name, blob_name, annotations):
 
-    for label in labels:
-        print(label.description)
+    html_result = '\n<p>No label found.</p>\n'
+    if len(annotations) > 0:
+        html_result = """
+        <table>
+        <tr><th>Label</th><th>Score</th></tr>
+        """
+        for label in annotations:
+            html_result += '<tr><td>{}</td><td>{}</td></tr>\n'.format(
+                label.description, label.score)
+
+        html_result += "</table>\n"
+
+    return html_result
+
+def get_text_detected(annotations):
+    html_result = ""
+    foundText = annotations.text.encode('utf-8').strip()
+    if len(foundText) > 0:
+        readLines = foundText.split('\n')
+        res = ' | '.join(readLines)
+        html_result += """
+        <table>
+        <tr><th style="text-align: left;">Detected items:</th></tr>
+        """
+        html_result += '<tr><td style="text-align: left;">{}</td></tr>\n'.format(res)
+        html_result += '</table>\n'
+    return html_result
 
 def render_full_text_annotation(bucket_name, blob_name, annotations):
-    # [START render_doc_text]
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     byte_stream = BytesIO()
@@ -165,18 +193,28 @@ def render_full_text_annotation(bucket_name, blob_name, annotations):
     byte_stream.seek(0)
     image = Image.open(byte_stream)
 
+    hasBounds = False
     bounds = get_text_annotations_bounds(annotations, FeatureType.PAGE)
-    draw_boxes(image, bounds, 'blue')
+    if len(bounds) > 0:
+        draw_boxes(image, bounds, 'blue')
+        hasBounds = True
     bounds = get_text_annotations_bounds(annotations, FeatureType.PARA)
-    draw_boxes(image, bounds, 'red')
+    if len(bounds) > 0:
+        draw_boxes(image, bounds, 'red')
+        hasBounds = True
     bounds = get_text_annotations_bounds(annotations, FeatureType.WORD)
-    draw_boxes(image, bounds, 'green')
+    if len(bounds) > 0:
+        draw_boxes(image, bounds, 'green')
+        hasBounds = True
 
-    prefix = os.path.splitext(blob_name)[0]
-    image.save('{}_full_text.jpg'.format(prefix))
-    with open('{}_full_text.txt'.format(prefix), 'w') as text_file:
-        text_file.write("{}".format(annotations))
+    html_result = "<p>No text detected.</p>"
+    if hasBounds:
+        prefix = os.path.splitext(blob_name)[0]
+        image_file_name = '{}_full_text.jpg'.format(prefix)
+        image.save(image_file_name)
+        html_result = '<img src={} alt="Text detection">'.format(image_file_name)
 
+    return html_result
 
 
 def annotate(bucket_name, blob_name):
@@ -190,37 +228,53 @@ def annotate(bucket_name, blob_name):
             {'type': vision.enums.Feature.Type.LABEL_DETECTION},
             {'type': vision.enums.Feature.Type.WEB_DETECTION}
         ]})
-    #json.dump(response, open('{}.json'.format(image), 'w'))
-    #print('Created file {}.json'.format(image))
-    # Manage response.web_detection as well as
-    # full_text_annotation label_annotations logo_annotations
-    # and face_annotations
-    # print('Response annotations:\n{}'.format(response.face_annotations))
+
     html_result = """
     <html>
-    <head></head>
-    <title>Vision results</tile>
-    <body><p>Hello World!</p></body>
-    </html>
+    <head>
+    <style>
+    table {
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+    }
+
+    td, th {
+        border: 0px solid #dddddd;
+        text-align: center;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: #dddddd;
+    }
+    </style>
+    <title>Vision results</title>
+    </head>
+    <body>
+    <h1>Faces detection</h1>
     """
-    render_face_annotations(bucket_name, blob_name, response.face_annotations, html_result)
-    render_full_text_annotation(bucket_name, blob_name, response.full_text_annotation)
-    render_web_annotations(bucket_name, blob_name, response.web_detection)
-    render_label_annotations(bucket_name, blob_name, response.label_annotations)
+    html_result += render_face_annotations(bucket_name, blob_name, response.face_annotations)
+    html_result += get_faces_likelihoods(response.face_annotations)
+    html_result += "\n<br/><h1>Text detection</h1>\n"
+    html_result += render_full_text_annotation(bucket_name, blob_name, response.full_text_annotation)
+    html_result += get_text_detected(response.full_text_annotation)
+    html_result += "\n<br/><h1>Web pages matching</h1>\n"
+    html_result += render_web_annotations(bucket_name, blob_name, response.web_detection)
+    html_result += "\n<h1>Labels detection</h1>\n"
+    html_result += render_label_annotations(bucket_name, blob_name, response.label_annotations)
     html_result += """
     </body>
     </html>
     """
-   prefix = os.path.splitext(blob_name)[0]
+    prefix = os.path.splitext(blob_name)[0]
     with open('{}_detection_result.html'.format(prefix), 'w') as text_file:
         text_file.write("{}".format(html_result))
 
-   prefix = os.path.splitext(blob_name)[0]
+    prefix = os.path.splitext(blob_name)[0]
     with open('{}_full_text.txt'.format(prefix), 'w') as text_file:
-        text_file.write("{}".format(annotations))
+        text_file.write("{}".format(response.full_text_annotation))
 
 def summarize(message):
-    # [START parse_message]
     data = message.data.decode('utf-8')
     attributes = message.attributes
 
@@ -259,11 +313,9 @@ def summarize(message):
                 object_size=size,
                 metageneration=metageneration)
     return description
-    # [END parse_message]
 
 def poll_notifications(project, subscription_name):
-    """Polls a Cloud Pub/Sub subscription for new GCS events for display."""
-    # [BEGIN poll_notifications]
+
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(
         project, subscription_name)
@@ -272,7 +324,7 @@ def poll_notifications(project, subscription_name):
         print('Received message:\n{}'.format(summarize(message)))
         message.ack()
         if 'OBJECT_FINALIZE' ==  message.attributes['eventType']:
-            annotate( message.attributes['bucketId'], message.attributes['objectId'])
+            annotate(message.attributes['bucketId'], message.attributes['objectId'])
 
     subscriber.subscribe(subscription_path, callback=callback)
 
@@ -281,7 +333,6 @@ def poll_notifications(project, subscription_name):
     print('Listening for messages on {}'.format(subscription_path))
     while True:
         time.sleep(60)
-    # [END poll_notifications]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -292,6 +343,8 @@ if __name__ == '__main__':
         help='The ID of the project that owns the subscription')
     parser.add_argument('subscription',
                         help='The ID of the Pub/Sub subscription')
+    parser.add_argument('outbucket',
+                        help='The name of the Cloud Storage bucket where to store results')
     args = parser.parse_args()
 # poll_notifications(args.project, args.subscription)
 # annotate('yorc-demo-vision-input', 'atos-bull-sequana.jpg')
