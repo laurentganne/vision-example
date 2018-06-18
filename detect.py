@@ -7,6 +7,7 @@ import argparse
 import json
 import time
 import os
+import tempfile
 
 from google.cloud import pubsub_v1
 from google.cloud import storage
@@ -111,7 +112,7 @@ def get_faces_likelihoods(faces):
         html_result += '</table></div><div style="clear:both"/>\n'
     return html_result
 
-def render_face_annotations(bucket_name, blob_name, faces):
+def render_face_annotations(bucket_name, blob_name, faces, out_bucket_name):
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     byte_stream = BytesIO()
@@ -130,10 +131,16 @@ def render_face_annotations(bucket_name, blob_name, faces):
 
     html_result = "\n<p>No face detected.</p>\n"
     if i > 1:
-        prefix = os.path.splitext(blob_name)[0]
-        image_file_name = '{}_faces.jpg'.format(prefix)
-        image.save(image_file_name)
-        html_result = '<div style="float:left; width: 60%"><img src={} alt="Faces"></div>'.format(image_file_name)
+        out_bucket = storage_client.get_bucket(out_bucket_name)
+        file_name = "faces.jpg"
+        out_blob_name = '{}/{}'.format(os.path.splitext(blob_name)[0], file_name)
+        tmp_fd, tmp_file_name = tempfile.mkstemp('.jpg')
+        os.close(tmp_fd)
+        image.save(tmp_file_name)
+        out_blob = out_bucket.blob(out_blob_name)
+        out_blob.upload_from_filename(tmp_file_name)
+        os.remove(tmp_file_name)
+        html_result = '<div style="float:left; width: 60%"><img src={} alt="Faces"></div>'.format(file_name)
             
     return html_result
 
@@ -217,7 +224,7 @@ def render_full_text_annotation(bucket_name, blob_name, annotations):
     return html_result
 
 
-def annotate(bucket_name, blob_name):
+def annotate(bucket_name, blob_name, out_bucket_name):
     imageURI = 'gs://{}/{}'.format(bucket_name, blob_name)
     print('Annotating {}'.format(imageURI))
     response = vision_client.annotate_image({
@@ -253,7 +260,7 @@ def annotate(bucket_name, blob_name):
     <body>
     <h1>Faces detection</h1>
     """
-    html_result += render_face_annotations(bucket_name, blob_name, response.face_annotations)
+    html_result += render_face_annotations(bucket_name, blob_name, response.face_annotations, out_bucket_name)
     html_result += get_faces_likelihoods(response.face_annotations)
     html_result += "\n<br/><h1>Text detection</h1>\n"
     html_result += render_full_text_annotation(bucket_name, blob_name, response.full_text_annotation)
@@ -314,7 +321,7 @@ def summarize(message):
                 metageneration=metageneration)
     return description
 
-def poll_notifications(project, subscription_name):
+def poll_notifications(project, subscription_name, out_bucket_name):
 
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(
@@ -324,7 +331,8 @@ def poll_notifications(project, subscription_name):
         print('Received message:\n{}'.format(summarize(message)))
         message.ack()
         if 'OBJECT_FINALIZE' ==  message.attributes['eventType']:
-            annotate(message.attributes['bucketId'], message.attributes['objectId'])
+            annotate(message.attributes['bucketId'], message.attributes['objectId'],
+                out_bucket_name)
 
     subscriber.subscribe(subscription_path, callback=callback)
 
@@ -346,6 +354,6 @@ if __name__ == '__main__':
     parser.add_argument('outbucket',
                         help='The name of the Cloud Storage bucket where to store results')
     args = parser.parse_args()
-# poll_notifications(args.project, args.subscription)
+# poll_notifications(args.project, args.subscription, args.outbucket)
 # annotate('yorc-demo-vision-input', 'atos-bull-sequana.jpg')
-annotate('yorc-demo-vision-input', 'atos-cea.jpg')
+annotate('yorc-demo-vision-input', 'atos-cea.jpg', 'yorc-demo-vision-output')
