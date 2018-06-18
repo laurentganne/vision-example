@@ -100,8 +100,7 @@ def get_faces_likelihoods(faces):
     i = 1
     if len(faces) > 0:
         html_result = """
-        <div style="float:right">
-        <table style="float:top;">
+        <table>
         <tr><th>Face ID</th><th>Very likely</th><th>Likely</th></tr>
         """
         for face in faces:
@@ -109,7 +108,7 @@ def get_faces_likelihoods(faces):
                 i, get_likelihoods(face, "VERY_LIKELY"), get_likelihoods(face, "LIKELY"))
             i += 1
 
-        html_result += '</table></div><div style="clear:both"/>\n'
+        html_result += '</table><br/>\n'
     return html_result
 
 def render_face_annotations(bucket_name, blob_name, faces, out_bucket_name):
@@ -139,12 +138,13 @@ def render_face_annotations(bucket_name, blob_name, faces, out_bucket_name):
         image.save(tmp_file_name)
         out_blob = out_bucket.blob(out_blob_name)
         out_blob.upload_from_filename(tmp_file_name)
+        out_blob.make_public()
         os.remove(tmp_file_name)
-        html_result = '<div style="float:left; width: 60%"><img src={} alt="Faces"></div>'.format(file_name)
+        html_result = '<img src={} alt="Faces">'.format(file_name)
             
     return html_result
 
-def render_web_annotations(bucket_name, blob_name, annotations):
+def get_web_annotations(bucket_name, blob_name, annotations):
 
     html_result = '\n<p>No web page matching found.</p>\n'
 
@@ -162,7 +162,7 @@ def render_web_annotations(bucket_name, blob_name, annotations):
     
     return html_result
 
-def render_label_annotations(bucket_name, blob_name, annotations):
+def get_label_annotations(bucket_name, blob_name, annotations):
 
     html_result = '\n<p>No label found.</p>\n'
     if len(annotations) > 0:
@@ -189,10 +189,10 @@ def get_text_detected(annotations):
         <tr><th style="text-align: left;">Detected items:</th></tr>
         """
         html_result += '<tr><td style="text-align: left;">{}</td></tr>\n'.format(res)
-        html_result += '</table>\n'
+        html_result += '</table><br/>\n'
     return html_result
 
-def render_full_text_annotation(bucket_name, blob_name, annotations):
+def render_document_text_annotation(bucket_name, blob_name, annotations,  out_bucket_name):
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     byte_stream = BytesIO()
@@ -216,10 +216,17 @@ def render_full_text_annotation(bucket_name, blob_name, annotations):
 
     html_result = "<p>No text detected.</p>"
     if hasBounds:
-        prefix = os.path.splitext(blob_name)[0]
-        image_file_name = '{}_full_text.jpg'.format(prefix)
-        image.save(image_file_name)
-        html_result = '<img src={} alt="Text detection">'.format(image_file_name)
+        out_bucket = storage_client.get_bucket(out_bucket_name)
+        file_name = "document_text.jpg"
+        out_blob_name = '{}/{}'.format(os.path.splitext(blob_name)[0], file_name)
+        tmp_fd, tmp_file_name = tempfile.mkstemp('.jpg')
+        os.close(tmp_fd)
+        image.save(tmp_file_name)
+        out_blob = out_bucket.blob(out_blob_name)
+        out_blob.upload_from_filename(tmp_file_name)
+        out_blob.make_public()
+        os.remove(tmp_file_name)
+        html_result = '<img src={} alt="Text detection">'.format(file_name)
 
     return html_result
 
@@ -246,40 +253,42 @@ def annotate(bucket_name, blob_name, out_bucket_name):
     }
 
     td, th {
-        border: 0px solid #dddddd;
+        border: 0px;
         text-align: center;
         padding: 8px;
     }
 
-    tr:nth-child(even) {
-        background-color: #dddddd;
-    }
     </style>
     <title>Vision results</title>
     </head>
     <body>
     <h1>Faces detection</h1>
     """
-    html_result += render_face_annotations(bucket_name, blob_name, response.face_annotations, out_bucket_name)
     html_result += get_faces_likelihoods(response.face_annotations)
-    html_result += "\n<br/><h1>Text detection</h1>\n"
-    html_result += render_full_text_annotation(bucket_name, blob_name, response.full_text_annotation)
+    html_result += render_face_annotations(bucket_name, blob_name, response.face_annotations, out_bucket_name)
+    html_result += "\n<br/><h1>Document text detection</h1>\n"
     html_result += get_text_detected(response.full_text_annotation)
+    html_result += render_document_text_annotation(bucket_name, blob_name, response.full_text_annotation, out_bucket_name)
     html_result += "\n<br/><h1>Web pages matching</h1>\n"
-    html_result += render_web_annotations(bucket_name, blob_name, response.web_detection)
+    html_result += get_web_annotations(bucket_name, blob_name, response.web_detection)
     html_result += "\n<h1>Labels detection</h1>\n"
-    html_result += render_label_annotations(bucket_name, blob_name, response.label_annotations)
+    html_result += get_label_annotations(bucket_name, blob_name, response.label_annotations)
     html_result += """
     </body>
     </html>
     """
-    prefix = os.path.splitext(blob_name)[0]
-    with open('{}_detection_result.html'.format(prefix), 'w') as text_file:
-        text_file.write("{}".format(html_result))
 
-    prefix = os.path.splitext(blob_name)[0]
-    with open('{}_full_text.txt'.format(prefix), 'w') as text_file:
-        text_file.write("{}".format(response.full_text_annotation))
+    out_bucket = storage_client.get_bucket(out_bucket_name)
+    file_name = "detection_results.html"
+    out_blob_name = '{}/{}'.format(os.path.splitext(blob_name)[0], file_name)
+    tmp_fd, tmp_file_name = tempfile.mkstemp('.html')
+    os.close(tmp_fd)
+    with open(tmp_file_name, 'w') as text_file:
+        text_file.write("{}".format(html_result))
+    out_blob = out_bucket.blob(out_blob_name)
+    out_blob.upload_from_filename(tmp_file_name)
+    out_blob.make_public()
+    os.remove(tmp_file_name)
 
 def summarize(message):
     data = message.data.decode('utf-8')
