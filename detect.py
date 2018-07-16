@@ -16,10 +16,13 @@ from google.cloud.vision import types
 from enum import Enum
 from io import BytesIO
 from PIL import Image, ImageDraw
+import google.api_core.exceptions
 
 
 vision_client = vision.ImageAnnotatorClient()
 storage_client = storage.Client()
+subscriber = pubsub_v1.SubscriberClient()
+publisher = pubsub_v1.PublisherClient()
 
 # Document text detection types
 class FeatureType(Enum):
@@ -332,7 +335,6 @@ def summarize(message):
 
 def poll_notifications(project, subscription_name, out_bucket_name):
 
-    subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(
         project, subscription_name)
 
@@ -351,18 +353,50 @@ def poll_notifications(project, subscription_name, out_bucket_name):
     while True:
         time.sleep(60)
 
+def create_storage_bucket(project_id, bucket_name):
+
+    try:
+        bucket = storage_client.create_bucket(bucket_name, project=project_id)
+    except google.cloud.exceptions.Conflict:
+        print('Bucket {} already exists'.format(bucket_name))
+        bucket = storage_client.get_bucket(bucket_name)
+
+    return bucket
+
+def create_storage_bucket_notification(project_id, bucket, topic_name):
+
+    notif = bucket.notification(topic_name, project_id)
+    if not notif.exists():
+        notif.create()
+
+def create_subscription(project_id, topic_name, subscription_name):
+
+    topic_path = subscriber.topic_path(project_id, topic_name)
+    subscription_path = subscriber.subscription_path(project_id, subscription_name)
+    subscriber.create_subscription(subscription_path, topic_path)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         'project',
-        help='The ID of the project that owns the subscription')
-    parser.add_argument('subscription',
-                        help='The ID of the Pub/Sub subscription')
+        help='The ID of the project that owns the storage buckets')
+    parser.add_argument('inbucket',
+                        help='The name of the Cloud Storage bucket where users upload images to analyze')
     parser.add_argument('outbucket',
                         help='The name of the Cloud Storage bucket where to store results')
     args = parser.parse_args()
-# poll_notifications(args.project, args.subscription, args.outbucket)
-# annotate('yorc-demo-vision-input', 'atos-bull-sequana.jpg')
-annotate('yorc-demo-vision-input', 'atos-cea.jpg', 'yorc-demo-vision-output')
+
+# Create Input storage bucket if needed,
+# as well as associated topic and subscription
+inBucket = create_storage_bucket(args.project, args.inbucket)
+topic_name = args.inbucket + "-topic"
+create_storage_bucket_notification(args.project, inBucket, topic_name)
+subscription_name = args.inbucket + "-sub"
+create_subscription(args.project, topic_name, subscription_name)
+
+create_storage_bucket(args.project, args.outbucket)
+
+poll_notifications(args.project, subscription_name, args.outbucket)
+
