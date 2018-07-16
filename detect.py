@@ -365,9 +365,23 @@ def create_storage_bucket(project_id, bucket_name):
 
 def create_storage_bucket_notification(project_id, bucket, topic_name):
 
+    topic = publisher.topic_path(project_id, topic_name)
+    try:
+        publisher.create_topic(topic)
+    except google.api_core.exceptions.AlreadyExists:
+        print('Topic {}/{} already exists'.format(project_id, topic_name))
+    
+    # Add permissions for this service account to publish messages to this topic
+    policy = publisher.get_iam_policy(topic)
+    binding = policy.bindings.add()
+    binding.role = 'roles/pubsub.publisher'
+    binding.members.append(
+    'serviceAccount:{}'
+    '@gs-project-accounts.iam.gserviceaccount.com'.format(project_id))
+    publisher.set_iam_policy(topic, policy)
+
     notif = bucket.notification(topic_name, project_id)
-    if not notif.exists():
-        notif.create()
+    notif.create()
 
 def create_subscription(project_id, topic_name, subscription_name):
 
