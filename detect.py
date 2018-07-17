@@ -372,13 +372,13 @@ def create_storage_bucket_notification(project_id, bucket, topic_name):
         print('Topic {}/{} already exists'.format(project_id, topic_name))
     
     # Add permissions for this service account to publish messages to this topic
-    policy = publisher.get_iam_policy(topic)
-    binding = policy.bindings.add()
-    binding.role = 'roles/pubsub.publisher'
-    binding.members.append(
-    'serviceAccount:{}'
-    '@gs-project-accounts.iam.gserviceaccount.com'.format(project_id))
-    publisher.set_iam_policy(topic, policy)
+    # policy = publisher.get_iam_policy(topic)
+    # binding = policy.bindings.add()
+    # binding.role = 'roles/pubsub.publisher'
+    # binding.members.append(
+    #     'serviceAccount:service-{}'
+    #     '@gs-project-accounts.iam.gserviceaccount.com'.format(project_id))
+    # publisher.set_iam_policy(topic, policy)
 
     notif = bucket.notification(topic_name, project_id)
     notif.create()
