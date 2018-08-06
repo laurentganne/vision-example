@@ -87,6 +87,7 @@ curl --request POST \
          --form 'file=@yorcPlugin.zip' > /dev/null
 
 res=$?
+rm -f yorcPlugin.zip
 if [ $res -ne 0 ]
 then
     echo "Exiting on error uploading the plugin in Alien4Cloud"
@@ -94,4 +95,3 @@ then
 else
     echo "Plugin registered in Alien4Cloud"
 fi
-
