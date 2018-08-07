@@ -9,13 +9,15 @@
 #
 
 a4cURL="http://localhost:8088"
-infraType="Google"
+infraType="Google Cloud"
+locationName="google"
 usage() {
     echo ""
     echo "Usage:"
-    echo "a4c_create_location [--a4c-url <Alien4Cloud URL>]  [--type <Infrastructure Types >]"
+    echo "a4c_create_location [--a4c-url <Alien4Cloud URL>] [--type <Infrastructure Type>] [--name <Location Name>]"
     echo "   - default A4C URL             : $a4cURL"
     echo "   - default Infrastructure Type : $infraType"
+    echo "   - default Location Name       : $locationName"
     exit 1
 }
 
@@ -39,6 +41,11 @@ case $key in
     ;;
     -t|--type)
     infraType="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -n|--name)
+    locationName="$2"
     shift # past argument
     shift # past value
     ;;
@@ -81,13 +88,13 @@ curl --request POST \
      --header 'Content-Type: application/json' \
      --cookie cookies.a4c \
      --silent \
-     --data "{\"infrastructureType\": \"$infraType\", \"name\": \"$infraType\"}" > /dev/null
+     --data "{\"infrastructureType\": \"$infraType\", \"name\": \"$locationName\"}" > /dev/null
 
 res=$?
 if [ $res -ne 0 ]
 then
-    echo "Exiting on error creating a location of type $infraType"
+    echo "Exiting on error creating location $locationName of type '$infraType'"
     exit 1
 else
-    echo "Location $infraType created"
+    echo "Location $locationName of type '$infraType' created"
 fi
