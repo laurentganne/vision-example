@@ -1,0 +1,119 @@
+#!/bin/bash
+
+#
+# a4c_set_application_inputs - Sets application input properties
+#
+
+a4cURL="http://localhost:8088"
+applicationName=""
+keyaluePairs=""
+usage() {
+    echo ""
+    echo "Usage:"
+    echo "a4c_set_application_inputs [--a4c-url <Alien4Cloud URL>] "
+    echo "                           --name <Application Name> --inputs \"key1=value1 key2=value2\""
+    echo "   - default A4C URL : $a4cURL"
+    exit 1
+}
+
+getJsonval() {
+	jsonKey=$1
+	jsonContent=$2
+    temp=`echo "$jsonContent" | awk -F"[{,:}]" '{for(i=1;i<=NF;i++){if($i~/\042'$jsonKey'\042/){print $(i+1)}}}' | tr -d '"' | sed -n 1p`
+    echo $temp
+}
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -a|--a4c-url)
+    a4cURL="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -i|--inputs)
+    keyaluePairs="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -n|--name)
+    applicationName="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -h|--help)
+    usage
+    exit 0
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+if [ -z "$applicationName" ]
+then
+    echo "Error: missing mandatory parameter application-name"
+    usage
+    exit 1
+fi
+
+# First, login and store the cookie
+curl -d "username=admin&password=admin&submit=Login"  \
+     --url  $a4cURL/login \
+     --dump-header headers \
+	 --silent \
+     --cookie-jar cookies.a4c
+
+# Get the Application environment ID
+res=`curl --request POST \
+         --url $a4cURL/rest/latest/applications/environments \
+         --header 'Content-Type: application/json' \
+         --cookie cookies.a4c \
+         --silent \
+          --data "[\"$applicationName\"]"`
+envID=`getJsonval id $res`
+
+if [ -z "$envID" ]
+then
+    echo "Exiting on error getting the environment ID for Application $applicationName"
+    exit 1
+fi
+
+# Create the data to post
+inputData=""
+for keyValuePair in $keyaluePairs; do
+    set -- `echo $keyValuePair | tr '=' ' '`
+    key=$1
+    value=$2
+    newInput="\"$key\": \"$value\""
+    if [ -z "$inputData" ]
+    then
+        inputData="$newInput"
+    else
+        inputData="$inputData, $newInput"
+    fi
+done
+postData="{\"inputProperties\": {$inputData}}"
+
+# Set input parameters
+response=`curl --request PUT \
+         --url $a4cURL/rest/latest/applications/Vision/environments/$envID/deployment-topology \
+         --header 'Content-Type: application/json' \
+         --cookie cookies.a4c \
+         --silent \
+          --data "$postData"`
+
+res=$?
+if [ $res -ne 0 ]
+then
+    echo "Exiting on error creating application $applicationName : $response"
+    exit 1
+fi
+
+echo "Input parameters set on Application $applicationName"
