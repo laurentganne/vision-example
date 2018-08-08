@@ -11,7 +11,7 @@ usage() {
     echo ""
     echo "Usage:"
     echo "a4c_set_application_inputs [--a4c-url <Alien4Cloud URL>] "
-    echo "                           --name <Application Name> --inputs \"key1=value1 key2=value2\""
+    echo "                           --application <Application Name> --inputs \"key1=value1 key2=value2\""
     echo "   - default A4C URL : $a4cURL"
     exit 1
 }
@@ -39,7 +39,7 @@ case $key in
     shift # past argument
     shift # past value
     ;;
-    -n|--name)
+    -n|--application)
     applicationName="$2"
     shift # past argument
     shift # past value
@@ -58,7 +58,7 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 if [ -z "$applicationName" ]
 then
-    echo "Error: missing mandatory parameter application-name"
+    echo "Error: missing mandatory parameter application name"
     usage
     exit 1
 fi
