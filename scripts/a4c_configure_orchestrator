@@ -16,7 +16,6 @@ usage() {
     echo "a4c_configure_orchestrator [--a4c-url <Alien4Cloud URL>] [--yorc-url <Yorc URL>]"
     echo "   - default A4C URL : $a4cURL"
     echo "   - default Yorc URL: $yorcURL"
-    exit 1
 }
 
 getJsonval() {

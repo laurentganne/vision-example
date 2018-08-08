@@ -26,7 +26,6 @@ usage() {
     echo "   - default Image Family  : $imageFamily"
     echo "   - default Compute Zone  : $computeZone"
     echo "   - default User Name : $imageProject"
-    exit 1
 }
 
 getJsonval() {

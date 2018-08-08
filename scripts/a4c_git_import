@@ -19,7 +19,6 @@ usage() {
     echo "   - default repository : $repositoryUrl"
     echo "   - default branch     : $branch"
     echo "   - default path       : $subPath"
-    exit 1
 }
 
 getJsonval() {

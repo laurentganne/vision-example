@@ -12,7 +12,6 @@ usage() {
     echo "a4c_upload_yorc_plugin.bash [--a4c-url <Alien4Cloud URL>] [--yorc-plugin-url <Yorc URL>]"
     echo "   - default A4C URL        : $a4cURL"
     echo "   - default Yorc plugin URL: $yorcPluginURL"
-    exit 1
 }
 
 POSITIONAL=()

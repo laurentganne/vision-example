@@ -14,7 +14,6 @@ usage() {
     echo "Usage:"
     echo "a4c_create_orchestrator.bash [--a4c-url <Alien4Cloud URL>]"
     echo "   - default A4C URL        : $a4cURL"
-    exit 1
 }
 
 POSITIONAL=()

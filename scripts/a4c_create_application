@@ -18,7 +18,6 @@ usage() {
     echo "   - default Application Name          : $applicationName"
     echo "   - default Topology Template Name    : $topologyTemplateName"
     echo "   - default Topology Template Version : $topologyTemplateVersion"
-    exit 1
 }
 
 POSITIONAL=()

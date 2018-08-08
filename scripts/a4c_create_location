@@ -18,7 +18,6 @@ usage() {
     echo "   - default A4C URL             : $a4cURL"
     echo "   - default Infrastructure Type : $infraType"
     echo "   - default Location Name       : $locationName"
-    exit 1
 }
 
 getJsonval() {
