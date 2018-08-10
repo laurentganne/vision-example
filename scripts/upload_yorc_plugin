@@ -83,31 +83,31 @@ fi
 
 # Download Yorc plugin
 echo "Downloading the plugin..."
-curl --request GET \
+response=`curl --request GET \
          --url $yorcPluginURL \
          --location \
-         --output yorcPlugin.zip
+         --output yorcPlugin.zip`
 
 res=$?
 if [ $res -ne 0 ]
 then
-    echo "Exiting on error downloading the plugin at $yorcPluginURL"
+    echo "Exiting on error downloading the plugin at $yorcPluginURL: $response"
     exit 1
 fi
 
 # Upload plugin in Alien4Cloud
-curl --request POST \
+response=`curl --request POST \
          --url $a4cURL/rest/latest/plugins \
          --header 'Content-Type: multipart/form-data' \
          --cookie cookies.a4c \
          --silent \
-         --form 'file=@yorcPlugin.zip' > /dev/null
+         --form 'file=@yorcPlugin.zip'`
 
 res=$?
 rm -f yorcPlugin.zip
 if [ $res -ne 0 ]
 then
-    echo "Exiting on error uploading the plugin in Alien4Cloud"
+    echo "Exiting on error uploading the plugin in Alien4Cloud: $response"
     exit 1
 else
     echo "Plugin uploaded in Alien4Cloud"
