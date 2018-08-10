@@ -1,25 +1,25 @@
 #!/bin/bash
 
 #
-# a4c_set_application_inputs - Sets application input properties
+# set_application_inputs - Sets application input properties
 #
 
 a4cURL="http://localhost:8088"
+userName="admin"
+password="admin"
 applicationName=""
 keyaluePairs=""
 usage() {
     echo ""
     echo "Usage:"
-    echo "a4c_set_application_inputs [--a4c-url <Alien4Cloud URL>] "
-    echo "                           --application <Application Name> --inputs \"key1=value1 key2=value2\""
+    echo "a4c_set_application_inputs [--a4c-url <Alien4Cloud URL>]"
+    echo "                           [--user <Alien4Cloud administrator user name>]"
+    echo "                           [--password <Alien4Cloud administrator password>]"
+    echo "                           --application <Application Name>"
+    echo "                           --inputs \"key1=value1 key2=value2\""
     echo "   - default A4C URL : $a4cURL"
-}
-
-getJsonval() {
-	jsonKey=$1
-	jsonContent=$2
-    temp=`echo "$jsonContent" | awk -F"[{,:}]" '{for(i=1;i<=NF;i++){if($i~/\042'$jsonKey'\042/){print $(i+1)}}}' | tr -d '"' | sed -n 1p`
-    echo $temp
+    echo "   - default user    : $userName"
+    echo "   - default password: $password"
 }
 
 POSITIONAL=()
@@ -33,13 +33,23 @@ case $key in
     shift # past argument
     shift # past value
     ;;
-    -i|--inputs)
-    keyaluePairs="$2"
+    -u|--user)
+    userName="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -p|--password)
+    password="$2"
     shift # past argument
     shift # past value
     ;;
     -n|--application)
     applicationName="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -i|--inputs)
+    keyaluePairs="$2"
     shift # past argument
     shift # past value
     ;;
@@ -62,19 +72,26 @@ then
     exit 1
 fi
 
-# First, login and store the cookie
-curl -d "username=admin&password=admin&submit=Login"  \
-     --url  $a4cURL/login \
-     --dump-header headers \
-	 --silent \
-     --cookie-jar cookies.a4c
+if [ -z "$keyaluePairs" ]
+then
+    echo "Error: missing mandatory parameter inputs"
+    usage
+    exit 1
+fi
+
+# Load utilities
+declare -r DIR=$(cd "$(dirname "$0")" && pwd)
+source $DIR/utils.bash
+
+# First, login and store the cookies
+a4c_login "$a4cURL" "$userName" "$password" "cookies.a4c"
 
 # Get the Application environment ID
 res=`curl --request POST \
-         --url $a4cURL/rest/latest/applications/environments \
-         --header 'Content-Type: application/json' \
-         --cookie cookies.a4c \
-         --silent \
+          --url $a4cURL/rest/latest/applications/environments \
+          --header 'Content-Type: application/json' \
+          --cookie cookies.a4c \
+          --silent \
           --data "[\"$applicationName\"]"`
 envID=`getJsonval id $res`
 
@@ -102,11 +119,11 @@ postData="{\"inputProperties\": {$inputData}}"
 
 # Set input parameters
 response=`curl --request PUT \
-         --url $a4cURL/rest/latest/applications/$applicationName/environments/$envID/deployment-topology \
-         --header 'Content-Type: application/json' \
-         --cookie cookies.a4c \
-         --silent \
-          --data "$postData"`
+               --url $a4cURL/rest/latest/applications/$applicationName/environments/$envID/deployment-topology \
+               --header 'Content-Type: application/json' \
+               --cookie cookies.a4c \
+               --silent \
+               --data "$postData"`
 
 res=$?
 if [ $res -ne 0 ]
