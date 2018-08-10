@@ -63,10 +63,10 @@ a4c_login "$a4cURL" "$userName" "$password" "cookies.a4c"
 
 # Check if a Yorc orchestrator already exists
 curl --request GET \
-         --url $a4cURL/rest/latest/orchestrators?query=Yorc \
-         --header 'Accept: application/json' \
-         --silent \
-         --cookie cookies.a4c \
+     --url $a4cURL/rest/latest/orchestrators?query=Yorc \
+     --header 'Accept: application/json' \
+     --silent \
+     --cookie cookies.a4c \
 | grep --quiet Yorc
 
 res=$?
@@ -78,11 +78,11 @@ fi
 
 # Create the orchestrator
 response=`curl --request POST \
-         --url $a4cURL/rest/latest/orchestrators \
-         --header 'Content-Type: application/json' \
-         --cookie cookies.a4c \
-         --silent \
-          --data "{\"name\": \"Yorc\", \"pluginId\": \"alien4cloud-yorc-plugin\", \"pluginBean\": \"yorc-orchestrator-factory\"}"`
+               --url $a4cURL/rest/latest/orchestrators \
+               --header 'Content-Type: application/json' \
+               --cookie cookies.a4c \
+               --silent \
+               --data "{\"name\": \"Yorc\", \"pluginId\": \"alien4cloud-yorc-plugin\", \"pluginBean\": \"yorc-orchestrator-factory\"}"`
 
 res=$?
 if [ $res -ne 0 ]

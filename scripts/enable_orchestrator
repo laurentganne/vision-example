@@ -18,13 +18,6 @@ usage() {
     echo "   - default password: $password"
 }
 
-getJsonval() {
-	jsonKey=$1
-	jsonContent=$2
-    temp=`echo "$jsonContent" | awk -F"[{,:}]" '{for(i=1;i<=NF;i++){if($i~/\042'$jsonKey'\042/){print $(i+1)}}}' | tr -d '"' | sed -n 1p`
-    echo $temp
-}
-
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
@@ -67,10 +60,10 @@ a4c_login "$a4cURL" "$userName" "$password" "cookies.a4c"
 
 # Get Orchestratror ID
 res=`curl --request GET \
-         --url $a4cURL/rest/latest/orchestrators?query=Yorc \
-         --header 'Accept: application/json' \
-         --silent \
-         --cookie cookies.a4c`
+          --url $a4cURL/rest/latest/orchestrators?query=Yorc \
+          --header 'Accept: application/json' \
+          --silent \
+          --cookie cookies.a4c`
 yorcID=`getJsonval id $res`
 
 if [ -z "$yorcID" ]
@@ -81,11 +74,11 @@ fi
 
 # Enable the orchestrator
 response=`curl --request POST \
-         --url $a4cURL/rest/latest/orchestrators/$yorcID/instance  \
-         --header 'Content-Type: application/json' \
-         --cookie cookies.a4c \
-         --silent \
-          --data "{}"`
+               --url $a4cURL/rest/latest/orchestrators/$yorcID/instance  \
+               --header 'Content-Type: application/json' \
+               --cookie cookies.a4c \
+               --silent \
+               --data "{}"`
 
 res=$?
 if [ $res -ne 0 ]

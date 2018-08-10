@@ -6,7 +6,7 @@
 
 #
 # a4c_login - login on Alien4Cloud anf store cookies
-# Expects 4 parameters :
+# Expects 4 parameters:
 # - URL of Alien4Cloud
 # - user name
 # - password
@@ -25,4 +25,15 @@ a4c_login() {
 	     --silent \
          --cookie-jar $4
 
+}
+
+# Get the value of a given key in a JSON string
+# Expects 2 parameters:
+# - key
+# - JSON string
+getJsonval() {
+	jsonKey=$1
+	jsonContent=$2
+    temp=`echo "$jsonContent" | awk -F"[{,:}]" '{for(i=1;i<=NF;i++){if($i~/\042'$jsonKey'\042/){print $(i+1)}}}' | tr -d '"' | sed -n 1p`
+    echo $temp
 }

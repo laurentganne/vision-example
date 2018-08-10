@@ -68,10 +68,10 @@ a4c_login "$a4cURL" "$userName" "$password" "cookies.a4c"
 
 # Check the plugin is not yet registered
 curl --request GET \
-         --url $a4cURL/rest/latest/plugins?query=alien4cloud-yorc-plugin \
-         --header 'Accept: application/json' \
-         --silent \
-         --cookie cookies.a4c \
+     --url $a4cURL/rest/latest/plugins?query=alien4cloud-yorc-plugin \
+     --header 'Accept: application/json' \
+     --silent \
+     --cookie cookies.a4c \
 | grep --quiet alien4cloud-yorc-plugin
 
 res=$?
@@ -84,9 +84,9 @@ fi
 # Download Yorc plugin
 echo "Downloading the plugin..."
 response=`curl --request GET \
-         --url $yorcPluginURL \
-         --location \
-         --output yorcPlugin.zip`
+               --url $yorcPluginURL \
+               --location \
+               --output yorcPlugin.zip`
 
 res=$?
 if [ $res -ne 0 ]
@@ -97,11 +97,11 @@ fi
 
 # Upload plugin in Alien4Cloud
 response=`curl --request POST \
-         --url $a4cURL/rest/latest/plugins \
-         --header 'Content-Type: multipart/form-data' \
-         --cookie cookies.a4c \
-         --silent \
-         --form 'file=@yorcPlugin.zip'`
+               --url $a4cURL/rest/latest/plugins \
+               --header 'Content-Type: multipart/form-data' \
+               --cookie cookies.a4c \
+               --silent \
+               --form 'file=@yorcPlugin.zip'`
 
 res=$?
 rm -f yorcPlugin.zip
