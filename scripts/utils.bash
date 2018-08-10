@@ -19,7 +19,7 @@ a4c_login() {
        exit 1
    fi
 
-    curl -d "username=$2&password=$3&submit=Login"  \
+    curl --data "username=$2&password=$3&submit=Login"  \
          --url  $1/login \
          --dump-header headers \
 	     --silent \
